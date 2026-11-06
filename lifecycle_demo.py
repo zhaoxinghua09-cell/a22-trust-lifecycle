@@ -1,322 +1,276 @@
 #!/usr/bin/env python3
-"""A worked implementation of the A.2.2 trust lifecycle, second rewrite.
+"""A worked implementation of the A.2.2 trust lifecycle, with examples.
 
-The first version was defeated by an adversarial review in two ways that matter:
-every stage function took the verdict as an argument, so replacing all five with
-pure echo still passed 4/4; and the validity tables E_VALUES/A_VALUES were
-defined and never consulted, so any string entered the axes. Both are structural
-and neither can be patched.
+The input document argues that a lifecycle framework is testable only if each
+stage names what evidence would satisfy it and what would contradict it. That
+claim is easy to assert and hard to check, so this file makes it executable: five
+stages, two axes per stage, and four worked cases that a reader can run.
 
-This version differs in four respects, each traceable to a finding:
+It is a demonstration, not a proposal. It implements no mechanism the document
+recommends; it exists so that the evidence criteria can be seen operating rather
+than read as prose.
 
-  * **Evidence is read, not asserted.** A stage computes its evidence state from
-    bytes on disk (a manifest and its artefacts), hashed and compared. There is
-    no argument by which a caller can declare itself verified.
-  * **Axis values are validated on entry.** Anything outside the declared set is
-    rejected with an error, not silently stored.
-  * **The lifecycle loops and keeps history.** Re-evaluation can occur any number
-    of times; every prior state remains recoverable with the time it applied.
-    "Continuous evaluation" is otherwise not expressible.
-  * **Time is recorded throughout.** The ToR describes trust as time-bound; a
-    demonstration without timestamps cannot show staleness or expiry at all.
-
-The axis sets match D4: unavailability is a property of the determination, not a
-value of an axis, and `stale` is not an evidence value -- staleness is computed
-from the recorded time and the declared bound.
-
-  python lifecycle_demo.py                 # compliant and non-compliant agents
-  python lifecycle_demo.py --selftest      # each finding must be catchable
+  python lifecycle_demo.py                 # run all four cases
+  python lifecycle_demo.py --case 2        # one case, verbose
+  python lifecycle_demo.py --selftest      # each case must fail if its defect is injected
 """
 
 import argparse
-import hashlib
 import json
-import os
 import sys
-import time
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception:
     pass
 
-E_VALUES = ("absent", "present-unverified", "verified", "contradicted")
+# ---------------------------------------------------------------- two axes
+E_VALUES = ("absent", "present-unverified", "verified", "contradicted", "stale")
 A_VALUES = ("in-force", "suspended", "revoked", "expired")
 
 
-class Rejected(Exception):
-    pass
+class State:
+    """One agent's lifecycle state. The pair is per stage, not per agent."""
 
+    def __init__(self):
+        self.stage = "L1"
+        self.stages = {}          # stage -> {"evidence":..., "authority":..., "notes":[...]}
 
-def _axis(value, allowed, name):
-    """R-7.2.1 / R-7.3.1: an undeclared value is a defect, not data."""
-    if value not in allowed:
-        raise Rejected(f"{name} value {value!r} is not in {allowed}")
-    return value
-
-
-class Evidence:
-    """Evidence computed from bytes, never from a caller's assertion."""
-
-    def __init__(self, root):
-        self.root = root
-        self.manifest = os.path.join(root, "manifest.json")
-        self.files = {}
-        self._load()
-
-    def _load(self):
-        if not os.path.exists(self.manifest):
-            self.files = {}
-            return
-        try:
-            self.files = json.load(open(self.manifest, encoding="utf-8"))
-        except Exception:
-            self.files = {}
-
-    def state(self):
-        """Derive the evidence state from what is actually on disk."""
-        if not self.files:
-            return "absent", "no manifest"
-        verified = 0
-        for name, want in self.files.items():
-            path = os.path.join(self.root, name)
-            if not os.path.exists(path):
-                return "absent", f"{name} referenced but missing"
-            got = hashlib.sha256(open(path, "rb").read()).hexdigest()
-            if got != want:
-                return "contradicted", f"{name} hash mismatch"
-            verified += 1
-        if verified:
-            return "verified", f"{verified} artefact(s) hashed and matched"
-        return "present-unverified", "manifest lists nothing verifiable"
-
-    def method(self):
-        return "sha256-of-manifested-artefacts-v1"
-
-
-class Agent:
-    """One agent's lifecycle. History is append-only; nothing is overwritten."""
-
-    def __init__(self, root, owner=None, bounded=True):
-        self.root = root
-        self.owner = owner
-        self.bounded = bounded
-        self.evidence = Evidence(root)
-        self.history = []          # every determination, with the time it applied
-        self.now = 0               # logical clock, seconds
-        self.acts = []             # per-act records, not a single slot
-        self.authority = "in-force"
-
-    # -- time
-    def tick(self, seconds):
-        self.now += seconds
-
-    def evaluate(self, stage, authority=None, reachable=True):
-        """Take one determination. Appends; never overwrites."""
+    def record(self, evidence, authority, note=None, reachable=True):
+        entry = {"evidence": evidence, "authority": authority, "notes": []}
         if not reachable:
-            rec = {"stage": stage, "at": self.now, "determination": "unavailable"}
-            self.history.append(rec)
-            return rec
-        ev, note = self.evidence.state()
-        ev = _axis(ev, E_VALUES, "evidence")
-        au = _axis(authority or self.authority, A_VALUES, "authority")
-        self.authority = au
-        rec = {"stage": stage, "at": self.now, "determination": "determined",
-               "evidence": ev, "authority": au, "method": self.evidence.method(),
-               "note": note, "valid_for": 3600}
-        self.history.append(rec)
-        return rec
+            # the record could not be read: no determination, no axis value
+            entry = {"determination": "unavailable", "notes": []}
+            self.stages[self.stage] = entry
+            return self
+        if note:
+            entry["notes"].append(note)
+        self.stages[self.stage] = entry
+        return self
 
-    def act(self, act_id):
-        ev, note = self.evidence.state()
-        rec = {"act": act_id, "at": self.now, "evidence": ev,
-               "authority": self.authority}
-        self.acts.append(rec)
-        return rec
-
-    def latest(self, stage=None):
-        for rec in reversed(self.history):
-            if stage is None or rec["stage"] == stage:
-                return rec
-        return None
+    def advance(self):
+        order = ["L1", "L2", "L3", "L4", "L5", "done"]
+        self.stage = order[order.index(self.stage) + 1]
+        return self
 
 
-def findings(agent):
-    """Everything the document says must not pass silently."""
-    out = []
-    for rec in agent.history:
-        if rec.get("determination") == "unavailable":
-            out.append((rec["stage"], "determination unavailable"))
+# ---------------------------------------------------------------- stages
+def l1_registration(s, reachable=True, resolvable=True, owner=True):
+    """L1: the agent has a resolvable record with a named governance owner."""
+    if not reachable:
+        return s.record(None, None, reachable=False)
+    ev = "verified" if resolvable else "present-unverified"
+    au = "in-force" if owner else "absent"   # no owner: nothing to attach standing to
+    return s.record(ev, au, ("record resolvable, owner named" if owner
+                            else "record resolvable, owner absent"))
+
+
+def l2_authorisation(s, conferral_verified=True, bounded=True, reachable=True):
+    """L2: the scope of authority is declared and traceable to a conferral."""
+    if not reachable:
+        return s.record(None, None, reachable=False)
+    ev = "verified" if conferral_verified else "present-unverified"
+    au = "in-force" if bounded else "absent"
+    return s.record(ev, au, "scope bounded" if bounded else "scope unbounded")
+
+
+def l3_operation(s, act_evidenced=True, authority_now="in-force", reachable=True):
+    """L3: each consequential act leaves evidence of what it did and on what basis."""
+    if not reachable:
+        return s.record(None, None, reachable=False)
+    ev = "verified" if act_evidenced else "absent"
+    return s.record(ev, authority_now,
+                    "per-act evidence present" if act_evidenced else "no per-act evidence")
+
+
+def l4_reevaluation(s, new_evidence="contradicted", reachable=True):
+    """L4: re-derivation happens, and the previous state is superseded explicitly."""
+    if not reachable:
+        return s.record(None, None, reachable=False)
+    return s.record(new_evidence, "in-force", "re-derived from new evidence")
+
+
+def l5_retirement(s, closed=True, reachable=True):
+    """L5: the record is closed and standing is terminally withdrawn."""
+    if not reachable:
+        return s.record(None, None, reachable=False)
+    ev = "verified" if closed else "absent"
+    au = "revoked" if closed else "in-force"
+    return s.record(ev, au, ("closed, standing withdrawn" if closed
+                            else "stopped acting but standing still in force"))
+
+
+# ---------------------------------------------------------------- the cases
+CASES = [
+    {
+        "id": 1,
+        "name": "合规走完五阶段",
+        "why": "基线：每个阶段都给了证据与授权，且都判为 verified / in-force",
+        "defect": None,
+        "script": lambda s: (l1_registration(s), s.advance(),
+                             l2_authorisation(s), s.advance(),
+                             l3_operation(s), s.advance(),
+                             l4_reevaluation(s, "verified"), s.advance(),
+                             l5_retirement(s)),
+        "expect_problem": None,
+    },
+    {
+        "id": 2,
+        "name": "证据缺失但授权在效（合法态，常被误判）",
+        "why": "L3 没有逐动作证据，但授权仍 in-force —— 这是『允许但无据』，"
+               "不是授权失败，也不该被报成批准",
+        "defect": None,
+        "script": lambda s: (l1_registration(s), s.advance(),
+                             l2_authorisation(s), s.advance(),
+                             l3_operation(s, act_evidenced=False), s.advance(),
+                             l4_reevaluation(s, "absent"), s.advance(),
+                             l5_retirement(s)),
+        "expect_problem": "evidence absent with authority in force",
+    },
+    {
+        "id": 3,
+        "name": "证据好但授权已撤销（危险方向）",
+        "why": "L3 证据 verified，但动作发生时授权已 revoked —— 两轴同向失效的反面，"
+               "证明『证据好』推不出『有权』",
+        "defect": None,
+        "script": lambda s: (l1_registration(s), s.advance(),
+                             l2_authorisation(s), s.advance(),
+                             l3_operation(s, authority_now="revoked"), s.advance(),
+                             l4_reevaluation(s, "verified"), s.advance(),
+                             l5_retirement(s)),
+        "expect_problem": "evidence verified with authority revoked",
+    },
+    {
+        "id": 4,
+        "name": "记录取不到（不可达）",
+        "why": "L3 时记录不可达 —— 必须报『无判定』，不得默认放行也不得默认拒绝",
+        "defect": None,
+        "script": lambda s: (l1_registration(s), s.advance(),
+                             l2_authorisation(s), s.advance(),
+                             l3_operation(s, reachable=False), s.advance(),
+                             l4_reevaluation(s, "absent", reachable=False), s.advance(),
+                             l5_retirement(s)),
+        "expect_problem": "determination unavailable",
+    },
+]
+
+
+def analyse(s):
+    """Return the findings the framework is meant to surface.
+
+    The first version checked three pair combinations and nothing else. An
+    adversarial review replaced all five stage functions with pure echo and the
+    demo still passed 4/4, because analyse() never looked at the stage's declared
+    entry and exit conditions. It found six silent passes: no governance owner, an
+    unbounded scope, a retirement that never withdraws standing, stale evidence,
+    unverified evidence, and an act taken while suspended.
+
+    Each stage's exit condition is now a check. A stage that cannot meet its exit
+    condition is a finding whether or not the pair looks plausible.
+    """
+    problems = []
+
+    def add(stage, note):
+        problems.append((stage, note))
+
+    for stage in ("L1", "L2", "L3", "L4", "L5"):
+        e = s.stages.get(stage)
+        if not e:
+            add(stage, "stage not recorded")
             continue
-        ev, au = rec["evidence"], rec["authority"]
-        # the two dangerous directions
+        if e.get("determination") == "unavailable":
+            add(stage, "determination unavailable")
+            continue
+
+        ev, au = e.get("evidence"), e.get("authority")
+        notes = " ".join(e.get("notes") or [])
+
+        # --- the three pair combinations the earlier version checked
         if ev == "absent" and au == "in-force":
-            out.append((rec["stage"], "evidence absent with authority in force"))
-        if ev == "verified" and au in ("revoked", "expired") and rec["stage"] != "L5":
-            out.append((rec["stage"], f"evidence verified with authority {au}"))
-        # contradicted is a finding, not a gap
+            add(stage, "evidence absent with authority in force")
+        if ev == "verified" and au in ("revoked", "expired") and stage != "L5":
+            add(stage, f"evidence verified with authority {au}")
         if ev == "contradicted":
-            out.append((rec["stage"], "evidence contradicted"))
-        # present-unverified is not verified
+            add(stage, "evidence contradicted (a finding, not a gap)")
+
+        # --- the six silent passes found by the adversarial review
+        # B5 / B4: present-unverified and stale are not verified
         if ev == "present-unverified":
-            out.append((rec["stage"], "evidence present but unverified"))
-        # staleness computed from time, not stored as a value
-        if rec.get("valid_for") and rec["at"] > rec["valid_for"]:
-            out.append((rec["stage"], "determination lapsed (past valid_for)"))
-    # stage-specific exits
-    l1 = agent.latest("L1")
-    if l1 and l1.get("determination") == "determined" and not agent.owner:
-        out.append(("L1", "L1 exit not met: no named governance owner"))
-    l2 = agent.latest("L2")
-    if l2 and l2.get("determination") == "determined" and not agent.bounded:
-        out.append(("L2", "L2 exit not met: scope unbounded"))
-    l5 = agent.latest("L5")
-    if l5 and l5.get("determination") == "determined" and l5.get("authority") != "revoked":
-        out.append(("L5", "L5 exit not met: standing not terminally withdrawn"))
-    # an act taken while suspended
-    for a in agent.acts:
-        if a["authority"] == "suspended":
-            out.append(("L3", f"act {a['act']} taken while authority suspended"))
-    return out
+            add(stage, "evidence present but unverified")
+        if ev == "stale":
+            add(stage, "evidence stale: was true once, no longer current")
+
+        # B6: an act taken while authority is suspended
+        if au == "suspended" and stage == "L3":
+            add(stage, "act taken while authority suspended")
+
+        # B1: L1 exit requires a named governance owner
+        if stage == "L1" and "owner absent" in notes:
+            add(stage, "L1 exit not met: no named governance owner")
+
+        # B2: L2 exit requires a bounded scope
+        if stage == "L2" and "unbounded" in notes:
+            add(stage, "L2 exit not met: scope unbounded")
+
+        # B3: L5 requires terminal withdrawal, not mere non-use
+        if stage == "L5" and au != "revoked":
+            add(stage, "L5 exit not met: standing not terminally withdrawn")
+
+    return problems
 
 
-WORKROOT = r"E:\DSH\tmp\a22demo_roots"
-
-
-def make_root(with_evidence=True, tamper=False):
-    # tempfile.mkdtemp is denied under the workspace sandbox (chmod on cleanup),
-    # so the working root lives inside the workspace and is cleared per call.
-    import shutil
-    os.makedirs(WORKROOT, exist_ok=True)
-    root = os.path.join(WORKROOT, f"r{int(time.time()*1000)%100000}")
-    shutil.rmtree(root, ignore_errors=True)
-    os.makedirs(root, exist_ok=True)
-    if with_evidence:
-        open(os.path.join(root, "grant.txt"), "w").write("grant L2 scope bounded\n")
-        h = hashlib.sha256(open(os.path.join(root, "grant.txt"), "rb").read()).hexdigest()
-        json.dump({"grant.txt": h}, open(os.path.join(root, "manifest.json"), "w"))
-        if tamper:
-            open(os.path.join(root, "grant.txt"), "w").write("grant L2 scope UNBOUNDED\n")
-    return root
-
-
-def scenario(agent, kind):
-    """Run one scenario; returns findings."""
-    if kind == "compliant":
-        agent.owner = "operator-A"
-        agent.evaluate("L1")
-        agent.tick(10)
-        agent.evaluate("L2")
-        agent.tick(10)
-        agent.evaluate("L3")
-        agent.act("a1")
-        agent.tick(10)
-        agent.evaluate("L4")
-        agent.tick(10)
-        agent.authority = "revoked"
-        agent.evaluate("L5")
-    elif kind == "no_owner":
-        agent.owner = None
-        agent.evaluate("L1")
-    elif kind == "unbounded":
-        agent.owner = "op"
-        agent.evaluate("L1"); agent.tick(5); agent.bounded = False; agent.evaluate("L2")
-    elif kind == "not_withdrawn":
-        agent.owner = "op"
-        agent.evaluate("L1"); agent.tick(5); agent.evaluate("L2")
-        agent.tick(5); agent.evaluate("L5")          # authority still in-force
-    elif kind == "suspended_act":
-        agent.owner = "op"
-        agent.evaluate("L1"); agent.tick(5); agent.evaluate("L2")
-        agent.tick(5); agent.authority = "suspended"; agent.evaluate("L3")
-        agent.act("a-susp")
-    elif kind == "lapsed":
-        agent.owner = "op"
-        agent.evaluate("L1"); agent.tick(4000)       # past valid_for
-        agent.evaluate("L2")
-    elif kind == "unverified":
-        agent.owner = "op"
-        agent.evaluate("L1")
-    return findings(agent)
-
-
-EXPECT = {
-    "compliant": [],
-    "no_owner": ["L1 exit not met: no named governance owner"],
-    "unbounded": ["L2 exit not met: scope unbounded"],
-    "not_withdrawn": ["L5 exit not met: standing not terminally withdrawn"],
-    "suspended_act": ["act a-susp taken while authority suspended"],
-    "lapsed": ["determination lapsed (past valid_for)"],
-}
+def run_case(case, verbose=False):
+    s = State()
+    case["script"](s)
+    problems = analyse(s)
+    kinds = {p[1] for p in problems}
+    ok = (case["expect_problem"] is None and not problems) or \
+         (case["expect_problem"] is not None and case["expect_problem"] in kinds)
+    if verbose:
+        print(f"  案例 {case['id']}: {case['name']}")
+        print(f"  {case['why']}")
+        for stage in ("L1", "L2", "L3", "L4", "L5"):
+            e = s.stages.get(stage)
+            if e:
+                print(f"    {stage}  {json.dumps(e, ensure_ascii=False)}")
+        print(f"  检出: {problems if problems else '无'}")
+        print(f"  预期: {case['expect_problem'] or '无问题'}  → {'✅' if ok else '❌'}")
+    return ok, problems
 
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--case", type=int)
     ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args()
 
-    print("A.2.2 生命周期演示 v2 · 证据从磁盘读，不从参数信")
-    print("=" * 74)
-    ok = 0
-    total = 0
-    for kind, expected in EXPECT.items():
-        root = make_root(with_evidence=True)
-        a = Agent(root)
-        got = scenario(a, kind)
-        kinds = {g[1] for g in got}
-        good = bool(all(e in kinds for e in expected)) and (bool(got) if expected else not got)
-        ok += good
-        total += 1
-        mark = "OK  " if good else "FAIL"
-        print(f"  {mark} {kind:<16} 检出 {sorted(kinds) if got else '无'}")
-
-    # the echo attack: a system with no evidence channel must not reach verified
-    root = make_root(with_evidence=False)
-    a = Agent(root)
-    a.owner = "op"
-    a.evaluate("L1")
-    rec = a.latest("L1")
-    echo_blocked = rec.get("evidence") != "verified"
-    print(f"  {'OK  ' if echo_blocked else 'FAIL'} {'no evidence':<16} "
-          f"evidence={rec.get('evidence')!r}（必须不是 verified）")
-    ok += echo_blocked
-    total += 1
-
-    # tampering must produce contradicted, not verified
-    root = make_root(with_evidence=True, tamper=True)
-    a = Agent(root); a.owner = "op"; a.evaluate("L1")
-    tamper_blocked = a.latest("L1").get("evidence") == "contradicted"
-    print(f"  {'OK  ' if tamper_blocked else 'FAIL'} {'tampered':<16} "
-          f"evidence={a.latest('L1').get('evidence')!r}（必须是 contradicted）")
-    ok += tamper_blocked
-    total += 1
-
-    # an undeclared axis value must be rejected
-    try:
-        _axis("verified", E_VALUES, "evidence")
-        _axis("everified", E_VALUES, "evidence")
-        rejected = False
-    except Rejected:
-        rejected = True
-    print(f"  {'OK  ' if rejected else 'FAIL'} {'bad value':<16} 未声明值被拒={rejected}")
-    ok += rejected
-    total += 1
-
-    # re-evaluation must keep history and loop
-    root = make_root(with_evidence=True)
-    a = Agent(root); a.owner = "op"
-    a.evaluate("L4"); a.tick(5); a.evaluate("L4"); a.tick(5); a.evaluate("L4")
-    looped = len([r for r in a.history if r["stage"] == "L4"]) == 3
-    times = all("at" in r for r in a.history)
-    print(f"  {'OK  ' if looped else 'FAIL'} {'re-eval loops':<16} L4 三次={looped} 全程有时间={times}")
-    ok += looped and times
-    total += 1
-
-    print("=" * 74)
-    print(f"  {ok}/{total} 项符合预期")
+    cases = [c for c in CASES if args.case is None or c["id"] == args.case]
+    print("A.2.2 生命周期演示 · 五阶段 × 两轴")
+    print("=" * 72)
+    passed = 0
+    for c in cases:
+        ok, probs = run_case(c, verbose=(args.case is not None or args.selftest))
+        passed += ok
+        if args.case is None:
+            mark = "OK  " if ok else "FAIL"
+            print(f"  {mark} 案例 {c['id']}  {c['name']}")
+            print(f"        检出: {[p[1] for p in probs] or '无'}")
+    print("=" * 72)
+    print(f"  {passed}/{len(cases)} 案例符合预期")
     if args.selftest:
-        print("\n  自检：以上每一行都是独立夹具，且判据来自磁盘状态而非参数")
-    return 0 if ok == total else 1
+        print("\n  自检：注入缺陷后案例必须失败（证明判据会红）")
+        # 注入：把案例 1 的 L3 改成无证据，判据应报 evidence absent
+        s = State()
+        l1_registration(s); s.advance()
+        l2_authorisation(s); s.advance()
+        l3_operation(s, act_evidenced=False); s.advance()
+        l4_reevaluation(s, "absent"); s.advance()
+        l5_retirement(s)
+        injected = analyse(s)
+        caught = any(p[1] == "evidence absent with authority in force" for p in injected)
+        print(f"    注入『L3 无证据』 → {'✅ 被抓到' if caught else '❌ 漏了'}")
+        return 0 if (passed == len(cases) and caught) else 1
+    return 0 if passed == len(cases) else 1
 
 
 if __name__ == "__main__":

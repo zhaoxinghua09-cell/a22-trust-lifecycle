@@ -60,8 +60,9 @@ def l1_registration(s, reachable=True, resolvable=True, owner=True):
     if not reachable:
         return s.record(None, None, reachable=False)
     ev = "verified" if resolvable else "present-unverified"
-    au = "in-force" if owner else "absent"
-    return s.record(ev, au, "record resolvable" if resolvable else "record not resolvable")
+    au = "in-force" if owner else "absent"   # no owner: nothing to attach standing to
+    return s.record(ev, au, ("record resolvable, owner named" if owner
+                            else "record resolvable, owner absent"))
 
 
 def l2_authorisation(s, conferral_verified=True, bounded=True, reachable=True):
@@ -95,7 +96,8 @@ def l5_retirement(s, closed=True, reachable=True):
         return s.record(None, None, reachable=False)
     ev = "verified" if closed else "absent"
     au = "revoked" if closed else "in-force"
-    return s.record(ev, au, "closed" if closed else "stopped acting but still on record")
+    return s.record(ev, au, ("closed, standing withdrawn" if closed
+                            else "stopped acting but standing still in force"))
 
 
 # ---------------------------------------------------------------- the cases
@@ -154,25 +156,66 @@ CASES = [
 
 
 def analyse(s):
-    """Return the problems the framework is meant to surface."""
+    """Return the findings the framework is meant to surface.
+
+    The first version checked three pair combinations and nothing else. An
+    adversarial review replaced all five stage functions with pure echo and the
+    demo still passed 4/4, because analyse() never looked at the stage's declared
+    entry and exit conditions. It found six silent passes: no governance owner, an
+    unbounded scope, a retirement that never withdraws standing, stale evidence,
+    unverified evidence, and an act taken while suspended.
+
+    Each stage's exit condition is now a check. A stage that cannot meet its exit
+    condition is a finding whether or not the pair looks plausible.
+    """
     problems = []
+
+    def add(stage, note):
+        problems.append((stage, note))
+
     for stage in ("L1", "L2", "L3", "L4", "L5"):
         e = s.stages.get(stage)
         if not e:
+            add(stage, "stage not recorded")
             continue
         if e.get("determination") == "unavailable":
-            problems.append((stage, "determination unavailable"))
+            add(stage, "determination unavailable")
             continue
+
         ev, au = e.get("evidence"), e.get("authority")
+        notes = " ".join(e.get("notes") or [])
+
+        # --- the three pair combinations the earlier version checked
         if ev == "absent" and au == "in-force":
-            problems.append((stage, "evidence absent with authority in force"))
-        # L5 is where standing is supposed to be withdrawn terminally, so
-        # "verified evidence with revoked authority" is the expected shape there
-        # and not a finding. The same pair at L1-L4 is the dangerous direction.
+            add(stage, "evidence absent with authority in force")
         if ev == "verified" and au in ("revoked", "expired") and stage != "L5":
-            problems.append((stage, f"evidence verified with authority {au}"))
+            add(stage, f"evidence verified with authority {au}")
         if ev == "contradicted":
-            problems.append((stage, "evidence contradicted (a finding, not a gap)"))
+            add(stage, "evidence contradicted (a finding, not a gap)")
+
+        # --- the six silent passes found by the adversarial review
+        # B5 / B4: present-unverified and stale are not verified
+        if ev == "present-unverified":
+            add(stage, "evidence present but unverified")
+        if ev == "stale":
+            add(stage, "evidence stale: was true once, no longer current")
+
+        # B6: an act taken while authority is suspended
+        if au == "suspended" and stage == "L3":
+            add(stage, "act taken while authority suspended")
+
+        # B1: L1 exit requires a named governance owner
+        if stage == "L1" and "owner absent" in notes:
+            add(stage, "L1 exit not met: no named governance owner")
+
+        # B2: L2 exit requires a bounded scope
+        if stage == "L2" and "unbounded" in notes:
+            add(stage, "L2 exit not met: scope unbounded")
+
+        # B3: L5 requires terminal withdrawal, not mere non-use
+        if stage == "L5" and au != "revoked":
+            add(stage, "L5 exit not met: standing not terminally withdrawn")
+
     return problems
 
 

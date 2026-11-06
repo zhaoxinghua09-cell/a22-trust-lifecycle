@@ -1,0 +1,96 @@
+<!doctype html><meta charset=utf-8><title>A.2.2 五阶段 × 两轴</title>
+<style>
+:root{--bg:#0d1117;--panel:#161b22;--line:#21262d;--ink:#e6edf3;--dim:#8b949e;
+--ok:#3fb950;--bad:#f85149;--warn:#d29922;--key:#58a6ff;
+--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);padding:32px 20px 60px;
+font:14.5px/1.6 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+.wrap{max-width:1080px;margin:0 auto}
+h1{font-size:23px;margin:0;font-weight:670;letter-spacing:-.01em}
+.sub{color:var(--dim);font-size:13px;margin:7px 0 28px}
+h2{font-size:13.5px;margin:30px 0 12px;color:var(--dim);font-weight:600;
+letter-spacing:.06em;text-transform:uppercase}
+.stage{display:grid;grid-template-columns:66px 1fr;gap:14px;
+background:var(--panel);border:1px solid var(--line);border-radius:11px;
+padding:15px 17px;margin-bottom:9px;align-items:start}
+.badge{font:700 15px/1 var(--mono);color:var(--key);padding-top:2px}
+.stage .n{font-weight:630;font-size:15px;margin-bottom:7px}
+.stage .n span{color:var(--dim);font-weight:400;font-size:13px;margin-left:7px}
+.row{display:grid;grid-template-columns:96px 1fr;gap:10px;margin:3px 0;
+font-size:13px;line-height:1.5}
+.row .k{color:var(--dim);font-size:11.5px;letter-spacing:.03em;
+text-transform:uppercase;padding-top:2px}
+.fail{color:var(--warn)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--dim);font:600 11.5px/1.4 var(--mono);
+letter-spacing:.05em;text-transform:uppercase;padding:8px 10px;
+border-bottom:1px solid var(--line)}
+td{padding:10px;border-bottom:1px solid rgba(33,38,45,.75);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td.id{font:700 12px/1.4 var(--mono);color:var(--key);white-space:nowrap}
+td.tag{white-space:nowrap;font:600 11.5px/1.4 var(--mono)}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:11px;
+padding:3px 4px}
+footer{margin-top:38px;padding-top:16px;border-top:1px solid var(--line);
+color:var(--dim);font-size:12px;line-height:1.85}
+code{font-family:var(--mono);font-size:11.5px;background:#21262d;padding:1.5px 5px;border-radius:4px}
+</style><div class=wrap>
+<h1>A.2.2 · 信任生命周期的五个阶段</h1>
+<div class=sub>阶段边界画在<b>所需证据发生变化的地方</b>，不画在组织责任变化的地方。每个阶段有 entry / exit 条件，以及该阶段最容易静默失败的方式。</div>
+<h2>五阶段</h2>
+<div class=stage>
+<div class=badge>L1</div>
+<div>
+<div class=n>登记<span>Registration</span></div>
+<div class=row><div class=k>进入条件</div><div>operator asserts the agent exists</div></div>
+<div class=row><div class=k>退出条件</div><div>resolvable record + named governance owner</div></div>
+<div class='row fail'><div class=k>静默失败</div><div>registered for inventory, reported as governed</div></div>
+</div></div>
+<div class=stage>
+<div class=badge>L2</div>
+<div>
+<div class=n>授权<span>Authorisation</span></div>
+<div class=row><div class=k>进入条件</div><div>agent is registered</div></div>
+<div class=row><div class=k>退出条件</div><div>scope of authority declared and bounded, traceable to a conferral</div></div>
+<div class='row fail'><div class=k>静默失败</div><div>authority asserted, not traceable</div></div>
+</div></div>
+<div class=stage>
+<div class=badge>L3</div>
+<div>
+<div class=n>运行<span>Operation</span></div>
+<div class=row><div class=k>进入条件</div><div>agent acts</div></div>
+<div class=row><div class=k>退出条件</div><div>per-act evidence: what was done, on what inputs, on what basis</div></div>
+<div class='row fail'><div class=k>静默失败</div><div>acts executed, evidence produced after the fact</div></div>
+</div></div>
+<div class=stage>
+<div class=badge>L4</div>
+<div>
+<div class=n>重评<span>Re-evaluation</span></div>
+<div class=row><div class=k>进入条件</div><div>new evidence, or a change to the reference</div></div>
+<div class=row><div class=k>退出条件</div><div>state re-derived; previous state superseded explicitly</div></div>
+<div class='row fail'><div class=k>静默失败</div><div>previous state persists, nobody re-derived</div></div>
+</div></div>
+<div class=stage>
+<div class=badge>L5</div>
+<div>
+<div class=n>退休<span>Retirement</span></div>
+<div class=row><div class=k>进入条件</div><div>agent stops acting</div></div>
+<div class=row><div class=k>退出条件</div><div>record closed; standing terminally withdrawn</div></div>
+<div class='row fail'><div class=k>静默失败</div><div>decommissioned in practice, still active on record</div></div>
+</div></div>
+<h2>四个可跑案例（<code>lifecycle_demo.py</code>）</h2>
+<div class=card><table>
+<tr><th>#</th><th>案例</th><th>检出</th><th>为什么这个案例存在</th></tr>
+<tr><td class=id>1</td><td>合规走完五阶段</td><td class='tag ok'>无检出</td><td>每阶段 evidence=verified / authority=in-force</td></tr>
+<tr><td class=id>2</td><td>证据缺失但授权在效</td><td class='tag warn'>允许但无据</td><td>L3 无逐动作证据，授权仍 in-force —— 合法态，单值表示会误报</td></tr>
+<tr><td class=id>3</td><td>证据好但授权已撤销</td><td class='tag bad'>危险方向</td><td>L3 evidence=verified 但 authority=revoked —— 好证据推不出有权</td></tr>
+<tr><td class=id>4</td><td>记录取不到</td><td class='tag warn'>无判定</td><td>不可达时必须报 determination unavailable，不得默认放行或拒绝</td></tr>
+</table></div>
+<footer>
+本图与 <code>A22.md</code> 同源；<code>lifecycle_demo.py</code> 的 4 个案例可离线复跑，注入缺陷会被抓到（<code>--selftest</code>）。<br>
+<b>两轴值集与 D4 一致</b>：不可达不产生轴值，而是产生<code>determination unavailable</code>。<br>
+<b>未核实</b>：文中「与医疗器械生命周期同构」的类比，ISO 13485 与 EU MDR 原文需订阅，本轮只查到二手来源，故该断言在文档中标注为需核实。<br>
+图为自审产物；红队轮另行记录。
+</footer></div>

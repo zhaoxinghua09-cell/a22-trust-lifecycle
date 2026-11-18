@@ -58,8 +58,7 @@ identified in the body so that a reader can check the source rather than take th
 summary on trust. Participation follows the ITU-T and FG-TIDA participation,
 conduct and intellectual property rights rules.
 
-DataTracker record: to be completed by the contributor at submission
-(contribution identifier assigned by the TIDA DataTracker).
+DataTracker record: FG-TIDA-WG1-004.
 
 .. toctree::
     :maxdepth: 3

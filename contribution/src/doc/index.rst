@@ -8,7 +8,7 @@ A Trust Lifecycle Framework for Agentic AI: Stage Evidence Criteria
 Abstract
 --------
 
-Work item A.2.2 asks for a trust lifecycle framework. This contribution answers with five stages — registration, admission, operation, incident, retirement — and two axes that must not be merged: what was demonstrated, and by whose authority it was accepted. Each stage carries the evidence criteria it imposes and the failure it produces when the criteria are absent; a runnable demonstration walks four cases through the stages, and an annex carries a case set for the composition rules so that the criteria can be checked rather than argued.
+Work item A.2.2 asks for a trust lifecycle framework. This contribution answers with five stages — registration, authorisation, operation, re-evaluation, retirement — and two axes that must not be merged: what was demonstrated, and by whose authority it was accepted. Each stage carries an entry condition, an exit condition and the failure it produces when the exit condition is not met; a runnable demonstration walks four cases through the stages, and an annex carries a case set for the composition rules so that the criteria can be checked rather than argued.
 
 History
 -------
@@ -22,6 +22,11 @@ History
       - Date
       - Focus Group
       - Working Group
+    * - 0.1.2
+      - A Trust Lifecycle Framework for Agentic AI: Stage Evidence Criteria
+      - 2026-11-28
+      - TIDA
+      - WG1 (CDRA)
     * - 0.1.1
       - A Trust Lifecycle Framework for Agentic AI: Stage Evidence Criteria
       - 2026-11-10
@@ -59,6 +64,12 @@ summary on trust. Participation follows the ITU-T and FG-TIDA participation,
 conduct and intellectual property rights rules.
 
 DataTracker record: FG-TIDA-WG1-004.
+
+.. note::
+
+   Version 0.1.2 corrects the abstract only: the stage names there did not match
+   the five stages stated in Chapter 4 (registration, authorisation, operation,
+   re-evaluation, retirement). No requirement, criterion or annex case is changed.
 
 .. toctree::
     :maxdepth: 3

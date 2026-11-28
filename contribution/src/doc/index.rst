@@ -1,9 +1,7 @@
 .. _chapter-overview:
 
-Title
-=====
-
 A Trust Lifecycle Framework for Agentic AI: Stage Evidence Criteria
+======================================================================
 
 Abstract
 --------
@@ -13,25 +11,18 @@ Work item A.2.2 asks for a trust lifecycle framework. This contribution answers 
 History
 -------
 
-.. list-table::
-    :header-rows: 1
-    :widths: 12 34 14 12 22
-
-    * - Version
-      - Document
-      - Date
-      - Focus Group
-      - Working Group
-    * - 0.1.2
-      - A Trust Lifecycle Framework for Agentic AI: Stage Evidence Criteria
-      - 2026-11-28
-      - TIDA
-      - WG1 (CDRA)
-    * - 0.1.1
-      - A Trust Lifecycle Framework for Agentic AI: Stage Evidence Criteria
-      - 2026-11-10
-      - TIDA
-      - WG1 (CDRA)
++---------+--------------------------------------------+----------+-------------+---------------+
+| Version | Document                                   | Approval | Focus Group | Working Group |
++=========+============================================+==========+=============+===============+
+| 0.3     | A Trust Lifecycle Framework for Agentic    | —        | TIDA        | WG1 (CDRA)    |
+|         | AI: Stage Evidence Criteria                |          |             |               |
++---------+--------------------------------------------+----------+-------------+---------------+
+| 0.1.2   | A Trust Lifecycle Framework for Agentic    | —        | TIDA        | WG1 (CDRA)    |
+|         | AI: Stage Evidence Criteria                |          |             |               |
++---------+--------------------------------------------+----------+-------------+---------------+
+| 0.1.1   | A Trust Lifecycle Framework for Agentic    | —        | TIDA        | WG1 (CDRA)    |
+|         | AI: Stage Evidence Criteria                |          |             |               |
++---------+--------------------------------------------+----------+-------------+---------------+
 
 Authors
 -------
@@ -45,7 +36,7 @@ Authors
       - Contact
     * - Steven Zhao
       - Independent expert (individual participant), ORCID 0009-0001-0512-1237
-      - zhaoxinghua06@126.com
+      - zhaoxinghua07@126.com
 
 Keywords
 --------
@@ -63,7 +54,7 @@ identified in the body so that a reader can check the source rather than take th
 summary on trust. Participation follows the ITU-T and FG-TIDA participation,
 conduct and intellectual property rights rules.
 
-DataTracker record: FG-TIDA-WG1-004.
+DataTracker record: FG-TIDA-WG1-004, Version 0.3, State Submitted. Version history is recorded in the History table above.
 
 .. note::
 
@@ -71,10 +62,17 @@ DataTracker record: FG-TIDA-WG1-004.
    the five stages stated in Chapter 4 (registration, authorisation, operation,
    re-evaluation, retirement). No requirement, criterion or annex case is changed.
 
+Note
+----
+
+This document is an individual contribution submitted to FG-TIDA Working Group 1. Nothing in this document records a working-group position or an approval.
+
+Contents
+--------
+
 .. toctree::
     :maxdepth: 3
     :numbered:
-    :hidden:
 
     chapters/01_conditions_and_evidence_criteria_at_each
     chapters/02_what_a_2_2_asks_for_and_what_this_note_a
